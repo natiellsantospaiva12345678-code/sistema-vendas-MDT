@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MDT | Sistema de Gestão Profissional</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root {
+            --primary: #8b5cf6;
+            --primary-dark: #6d28d9;
+            --accent: #d8b4fe;
+            --bg: #0f172a;
+            --card: #1e1b4b;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --text: #f8fafc;
+        }
+
+        body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); margin: 0; padding-bottom: 50px; }
+        
+        /* Layout */
+        header { background: #1e1b4b; padding: 1.2rem; border-bottom: 3px solid var(--primary); display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+        .container { max-width: 900px; margin: auto; padding: 15px; }
+
+        /* Tabs Profissionais */
+        .tabs { display: flex; background: #111827; padding: 5px; border-radius: 10px; margin-bottom: 20px; gap: 5px; }
+        .tabs button { flex: 1; padding: 12px; border: none; border-radius: 8px; background: transparent; color: #94a3b8; font-weight: bold; cursor: pointer; transition: 0.3s; }
+        .tabs button.active { background: var(--primary); color: white; }
+
+        /* Grid de Vendas */
+        .category-title { color: var(--accent); font-size: 14px; text-transform: uppercase; letter-spacing: 1px; margin: 20px 0 10px; border-bottom: 1px solid #334155; padding-bottom: 5px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+        .item-card { background: var(--card); padding: 12px; border-radius: 10px; border: 1px solid #312e81; text-align: center; }
+        .item-card span { display: block; font-size: 13px; margin-bottom: 8px; }
+        .item-card input { width: 100%; background: #0f172a; border: 1px solid var(--primary); color: white; padding: 6px; border-radius: 5px; text-align: center; }
+
+        /* Pedidos */
+        .pedido-card { background: var(--card); padding: 15px; border-radius: 12px; margin-bottom: 12px; border-left: 6px solid var(--primary); position: relative; }
+        .status-badge { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: bold; float: right; }
+        .badge-pendente { background: #451a03; color: #fbbf24; }
+        .badge-preparando { background: #172554; color: #3b82f6; }
+        .badge-pronto { background: #064e3b; color: #4ade80; animation: blink 1.5s infinite; }
+
+        @keyframes blink { 50% { opacity: 0.6; } }
+
+        /* Botões */
+        .btn-main { background: var(--primary); color: white; padding: 15px; border: none; border-radius: 8px; width: 100%; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 20px; }
+        .btn-status { padding: 6px 12px; border: none; border-radius: 5px; color: white; cursor: pointer; font-size: 12px; margin-right: 5px; margin-top: 10px; }
+
+        /* Auth */
+        .auth-screen { display: flex; justify-content: center; align-items: center; height: 100vh; }
+        .auth-box { background: var(--card); padding: 30px; border-radius: 15px; width: 320px; border: 1px solid var(--primary); text-align: center; }
+        input[type="text"], input[type="password"], select { width: 100%; padding: 12px; margin: 10px 0; background: #0f172a; border: 1px solid #312e81; color: white; border-radius: 8px; }
+
+        /* Admin Info */
+        .stats-bar { display: flex; gap: 10px; margin-bottom: 20px; }
+        .stat-card { flex: 1; background: #1e1b4b; padding: 15px; border-radius: 10px; text-align: center; border: 1px solid var(--primary); }
+    </style>
+</head>
+<body>
+
+<audio id="audioNotif" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"></audio>
+
+<div id="viewAuth" class="auth-screen">
+    <div class="auth-box">
+        <h2 style="color:var(--primary); margin-bottom:20px;">💜 MDT STORE</h2>
+        <input id="loginUser" type="text" placeholder="Usuário">
+        <input id="loginPass" type="password" placeholder="Senha">
+        <button onclick="handleLogin()" class="btn-main">Entrar</button>
+        <button onclick="handleCadastro()" style="background:transparent; color:var(--accent); border:none; margin-top:15px; cursor:pointer;">Criar uma conta</button>
+    </div>
+</div>
+
+<div id="viewMain" style="display:none;">
+    <header>
+        <span style="font-weight:bold; font-size:1.2rem;">MDT <span style="color:var(--primary)">PRO</span></span>
+        <div style="display:flex; align-items:center; gap:15px;">
+            <span id="labelUser" style="font-size:14px; color:var(--accent)"></span>
+            <button onclick="location.reload()" style="background:var(--danger); border:none; color:white; padding:5px 10px; border-radius:5px; cursor:pointer;">Sair</button>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="tabs">
+            <button id="tabBuy" class="active" onclick="showTab('buy')">🛒 Comprar</button>
+            <button id="tabOrders" onclick="showTab('orders')">📜 Meus Pedidos</button>
+            <button id="tabAdmin" onclick="showTab('admin')" style="display:none; color:var(--warning)">🛠 Operador</button>
+        </div>
+
+        <div id="paneBuy">
+            <label style="font-size:12px; color:var(--accent)">Selecione o tipo de cliente:</label>
+            <select id="selectTabela">
+                <option value="normal">Tabela Normal</option>
+                <option value="parceiro">Tabela Parceiro (VIP)</option>
+            </select>
+
+            <div class="category-title">Equipamentos</div>
+            <div class="grid" id="gridEquip"></div>
+
+            <div class="category-title">Cartões de Acesso</div>
+            <div class="grid" id="gridCards"></div>
+
+            <div class="category-title">Munições</div>
+            <div class="grid" id="gridAmmo"></div>
+
+            <button onclick="createOrder()" class="btn-main">Enviar Pedido para Análise</button>
+        </div>
+
+        <div id="paneOrders" style="display:none;">
+            <h3 style="margin-top:0">Seus Pedidos em Aberto</h3>
+            <div id="listClientOrders"></div>
+        </div>
+
+        <div id="paneAdmin" style="display:none;">
+            <div class="stats-bar">
+                <div class="stat-card">
+                    <div style="font-size:12px; color:var(--accent)">Vendas Hoje</div>
+                    <div id="statTotal" style="font-size:1.2rem; font-weight:bold; color:var(--success)">R$ 0</div>
+                </div>
+                <button onclick="clearHistory()" style="background:var(--danger); border:none; color:white; padding:10px; border-radius:10px; cursor:pointer; font-weight:bold;">Limpar Banco</button>
+            </div>
+            <div id="listAdminOrders"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+// CONFIGURAÇÃO SUPABASE
+const supabaseUrl = "https://gznoajgxxklgspeobgqj.supabase.co";
+const supabaseKey = "sb_publishable_WDaRdocyOlxyOPtb3LkWsA_l7_U0Nnc";
+const _sb = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+// DADOS DE PRODUTOS
+const Catalog = {
+    equip: { fuzil: ["🔫 Fuzil", 500000, 400000], sniper: ["🎯 Sniper", 200000, 160000], smg: ["🔫 SMG", 130000, 105000], pistola: ["🔫 Pistola", 80000, 64000], c4: ["💣 C4", 25000, 20000], dinamite: ["🧨 Dinamite", 10000, 6000] },
+    cards: { c1: ["💳 Nível 1", 20000, 15000], c2: ["💳 Nível 2", 20000, 15000], c3: ["💳 Nível 3", 20000, 15000], c4card: ["💳 Nível 4", 50000, 45000], c5: ["💳 Nível 5", 60000, 55000] },
+    ammo: { msniper: ["📦 Muni Sniper", 8000, 7500], mrifle: ["📦 Muni Rifle", 900, 850], msmg: ["📦 Muni SMG", 800, 750] }
+};
+
+let CurrentUser = null;
+let LastOrderId = 0;
+
+// INICIALIZAR GRIDS
+function setupGrids() {
+    for (let cat in Catalog) {
+        const grid = document.getElementById('grid' + cat.charAt(0).toUpperCase() + cat.slice(1));
+        for (let id in Catalog[cat]) {
+            grid.innerHTML += `<div class="item-card"><span>${Catalog[cat][id][0]}</span><input type="number" id="inp_${id}" placeholder="0" min="0"></div>`;
+        }
+    }
+}
+setupGrids();
+
+// NAVEGAÇÃO
+function showTab(t) {
+    document.getElementById('paneBuy').style.display = t === 'buy' ? 'block' : 'none';
+    document.getElementById('paneOrders').style.display = t === 'orders' ? 'block' : 'none';
+    document.getElementById('paneAdmin').style.display = t === 'admin' ? 'block' : 'none';
+    
+    document.getElementById('tabBuy').className = t === 'buy' ? 'active' : '';
+    document.getElementById('tabOrders').className = t === 'orders' ? 'active' : '';
+    document.getElementById('tabAdmin').className = t === 'admin' ? 'active' : '';
+
+    if(t === 'orders') syncClient();
+    if(t === 'admin') syncAdmin();
+}
+
+// AUTENTICAÇÃO
+async function handleLogin() {
+    const { data } = await _sb.from('usuarios').select('*').eq('usuario', loginUser.value).eq('senha', loginPass.value).single();
+    if(data) {
+        CurrentUser = data;
+        viewAuth.style.display = 'none';
+        viewMain.style.display = 'block';
+        labelUser.innerText = '👤 ' + data.usuario;
+        
+        if(data.tipo === 'operador') {
+            tabAdmin.style.display = 'block';
+            setInterval(syncAdmin, 5000);
+        }
+        setInterval(syncClient, 5000);
+    } else alert("Usuário ou senha incorretos.");
+}
+
+async function handleCadastro() {
+    const { error } = await _sb.from('usuarios').insert([{ usuario: loginUser.value, senha: loginPass.value, tipo: 'cliente' }]);
+    alert(error ? "Erro: Nome já em uso." : "Conta criada! Faça o login.");
+}
+
+// LOGICA DE COMPRA
+async function createOrder() {
+    const isVip = selectTabela.value === 'parceiro';
+    let total = 0;
+    let items = [];
+
+    for (let cat in Catalog) {
+        for (let id in Catalog[cat]) {
+            const qty = Number(document.getElementById('inp_' + id).value) || 0;
+            if(qty > 0) {
+                const price = isVip ? Catalog[cat][id][2] : Catalog[cat][id][1];
+                total += qty * price;
+                items.push(`${Catalog[cat][id][0]} (x${qty})`);
+            }
+        }
+    }
+
+    if(total === 0) return alert("Adicione produtos primeiro!");
+
+    const { error } = await _sb.from('pedidos').insert([{
+        cliente: CurrentUser.usuario,
+        itens: items.join(", "),
+        total: total,
+        status: 'Pendente',
+        data: new Date().toLocaleString('pt-BR')
+    }]);
+
+    if(!error) {
+        alert("Sucesso! Aguarde o operador analisar seu pedido.");
+        document.querySelectorAll('input[type="number"]').forEach(i => i.value = "");
+    }
+}
+
+// SINCRONIZAÇÃO
+async function syncClient() {
+    const { data } = await _sb.from('pedidos').select('*').eq('cliente', CurrentUser.usuario).order('id', {ascending: false});
+    if(!data) return;
+    listClientOrders.innerHTML = data.map(p => `
+        <div class="pedido-card" style="border-color: ${p.status === 'Pronto' ? 'var(--success)' : 'var(--primary)'}">
+            <span class="status-badge badge-${p.status.toLowerCase()}">${p.status}</span>
+            <small style="color:var(--accent)">${p.data}</small>
+            <p style="margin:10px 0; font-size:14px;">${p.itens}</p>
+            <div style="font-weight:bold; color:var(--success)">Total: R$ ${p.total.toLocaleString()}</div>
+        </div>
+    `).join('');
+}
+
+async function syncAdmin() {
+    const { data } = await _sb.from('pedidos').select('*').order('id', {ascending: false});
+    if(!data) return;
+
+    if(data.length > 0 && data[0].id > LastOrderId) {
+        if(LastOrderId !== 0) audioNotif.play().catch(()=>{});
+        LastOrderId = data[0].id;
+    }
+
+    let revenue = 0;
+    listAdminOrders.innerHTML = data.map(p => {
+        revenue += p.total;
+        return `
+            <div class="pedido-card">
+                <span class="status-badge badge-${p.status.toLowerCase()}">${p.status}</span>
+                <strong>👤 ${p.cliente}</strong><br>
+                <small>${p.itens}</small><br>
+                <strong style="color:var(--success)">R$ ${p.total.toLocaleString()}</strong>
+                <div>
+                    <button class="btn-status" style="background:var(--primary)" onclick="updateStatus(${p.id}, 'Preparando')">Preparar</button>
+                    <button class="btn-status" style="background:var(--success)" onclick="updateStatus(${p.id}, 'Pronto')">Finalizar</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+    statTotal.innerText = 'R$ ' + revenue.toLocaleString();
+}
+
+async function updateStatus(id, s) {
+    await _sb.from('pedidos').update({ status: s }).eq('id', id);
+    syncAdmin();
+}
+
+async function clearHistory() {
+    if(confirm("Deseja deletar permanentemente todo o histórico de vendas?")) {
+        await _sb.from('pedidos').delete().neq('id', 0);
+        syncAdmin();
+    }
+}
+</script>
+</body>
+</html>
